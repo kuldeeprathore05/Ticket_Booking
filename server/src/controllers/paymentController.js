@@ -9,9 +9,7 @@ const RAZORPAY_ENABLED = Boolean(
 );
 
 let razorpayInstance = null;
-if (RAZORPAY_ENABLED) {
-  // Lazily imported so the project runs fine without the razorpay package
-  // configured at all when running in mock mode.
+if (RAZORPAY_ENABLED) { 
   const Razorpay = (await import("razorpay")).default;
   razorpayInstance = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
@@ -19,11 +17,7 @@ if (RAZORPAY_ENABLED) {
   });
 }
 
-// POST /api/payments/create
-// body: { bookingId }
-// Creates a payment order for the booking. In mock mode this just returns
-// a fake order id the frontend can "pay" against; the shape mirrors what
-// Razorpay would return so swapping to real payments later is a drop-in.
+// POST /api/payments/create 
 export const createPaymentOrder = asyncHandler(async (req, res) => {
   const { bookingId } = req.body;
   const booking = await Booking.findById(bookingId);
@@ -54,8 +48,7 @@ export const createPaymentOrder = asyncHandler(async (req, res) => {
       keyId: process.env.RAZORPAY_KEY_ID,
     });
   }
-
-  // ---- Mock payment order ----
+ 
   const mockOrderId = `mock_order_${booking.bookingReference}`;
   booking.paymentOrderId = mockOrderId;
   await booking.save();
@@ -69,9 +62,7 @@ export const createPaymentOrder = asyncHandler(async (req, res) => {
   });
 });
 
-// POST /api/payments/verify
-// Real mode body: { bookingId, razorpay_order_id, razorpay_payment_id, razorpay_signature }
-// Mock mode body: { bookingId, mockOutcome: "success" | "failure" }
+// POST /api/payments/verify ,,, Real mode body: { bookingId, razorpay_order_id, razorpay_payment_id, razorpay_signature } ,,,  Mock mode body: { bookingId, mockOutcome: "success" | "failure" }
 export const verifyPayment = asyncHandler(async (req, res) => {
   const { bookingId } = req.body;
   const booking = await Booking.findById(bookingId);
@@ -98,8 +89,7 @@ export const verifyPayment = asyncHandler(async (req, res) => {
     }
 
     booking.paymentId = razorpay_payment_id;
-  } else {
-    // ---- Mock verification ----
+  } else { 
     const { mockOutcome = "success" } = req.body;
     if (mockOutcome !== "success") {
       booking.paymentStatus = "FAILED";

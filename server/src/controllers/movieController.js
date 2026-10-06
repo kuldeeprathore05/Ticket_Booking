@@ -30,8 +30,23 @@ export const getMovieById = asyncHandler(async (req, res) => {
  
 export const getShowsForMovie = asyncHandler(async (req, res) => {
   const { date, city } = req.query;
-  const filter = { movieId: req.params.id };
-  if (date) filter.date = date;
+
+  // req.params.id is the same ID used by getMovieById()
+  // First get the actual movie document.
+  const movie = await Movie.findById(req.params.id);
+
+  if (!movie) {
+    throw new ApiError(404, "Movie not found");
+  }
+
+  // Shows were seeded using movies[n]._id
+  const filter = {
+    movieId: movie._id,
+  };
+
+  if (date) {
+    filter.date = date;
+  }
 
   let shows = await Show.find(filter)
     .populate("theatreId", "name location")
@@ -40,17 +55,26 @@ export const getShowsForMovie = asyncHandler(async (req, res) => {
 
   if (city) {
     shows = shows.filter(
-      (s) => s.theatreId?.location?.city?.toLowerCase() === city.toLowerCase()
+      (s) =>
+        s.theatreId?.location?.city?.toLowerCase() ===
+        city.toLowerCase()
     );
   }
- 
+
   const grouped = {};
+
   for (const show of shows) {
     const theatreId = show.theatreId?._id?.toString();
+
     if (!theatreId) continue;
+
     if (!grouped[theatreId]) {
-      grouped[theatreId] = { theatre: show.theatreId, shows: [] };
+      grouped[theatreId] = {
+        theatre: show.theatreId,
+        shows: [],
+      };
     }
+
     grouped[theatreId].shows.push({
       _id: show._id,
       screen: show.screenId,
@@ -61,5 +85,8 @@ export const getShowsForMovie = asyncHandler(async (req, res) => {
     });
   }
 
-  res.json({ success: true, data: Object.values(grouped) });
+  res.json({
+    success: true,
+    data: Object.values(grouped),
+  });
 });

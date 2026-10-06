@@ -23,7 +23,7 @@ app.use(
 app.use(express.json());
 app.use(morgan("dev"));
 
-app.get("/api/health", (req, res) => res.json({ success: true, message: "OK" }));
+app.get("/health", (req, res) => res.json({ success: true, message: "OK" }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/movies", movieRoutes);
