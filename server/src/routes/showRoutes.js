@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth, attachUser } from "../middleware/auth.js";
+import { requireAuth, attachUser,requestTimer } from "../middleware/auth.js";
 import { getShowById, getShowSeats } from "../controllers/showController.js";
 import { reserveShowSeats, validateReserveSeats,releaseShowSeats } from "../controllers/seatController.js";
 
@@ -9,6 +9,7 @@ router.get("/:id", getShowById);
 router.get("/:showId/seats", getShowSeats);
 router.post(
   "/:showId/reserve-seats",
+  requestTimer,
   requireAuth,
   attachUser,
   validateReserveSeats,

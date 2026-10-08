@@ -36,3 +36,8 @@ export const requireAdmin = (req, res, next) => {
   }
   next();
 };
+
+export const requestTimer = (req, res, next) => {
+  req.requestStart = performance.now();
+  next();
+};

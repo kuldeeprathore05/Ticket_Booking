@@ -11,6 +11,8 @@ export const validateReserveSeats = [
 ];
  
 export const reserveShowSeats = asyncHandler(async (req, res) => {
+  const totalStart = performance.now();
+
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     throw new ApiError(400, errors.array()[0].msg);
@@ -20,20 +22,50 @@ export const reserveShowSeats = asyncHandler(async (req, res) => {
   const { seats } = req.body;
   const userId = req.user._id.toString();
 
+  const showStart = performance.now();
+
   const show = await Show.findById(showId);
+
+  console.log(
+    "Show query:",
+    (performance.now() - showStart).toFixed(2),
+    "ms"
+  );
+
   if (!show) throw new ApiError(404, "Show not found");
 
+  const screenStart = performance.now();
+
   const screen = await Screen.findById(show.screenId);
+
+  console.log(
+    "Screen query:",
+    (performance.now() - screenStart).toFixed(2),
+    "ms"
+  );
+
   if (!screen) throw new ApiError(404, "Screen not found");
 
+  const validationStart = performance.now();
+
   const validSeatIds = new Set(screen.seatLayout.flat());
+
   for (const seatId of seats) {
     if (!validSeatIds.has(seatId)) {
       throw new ApiError(400, `Invalid seat id: ${seatId}`);
     }
   }
- 
-  const alreadyBooked = seats.filter((s) => show.bookedSeats.includes(s));
+
+  const alreadyBooked = seats.filter((s) =>
+    show.bookedSeats.includes(s)
+  );
+
+  console.log(
+    "Validation:",
+    (performance.now() - validationStart).toFixed(2),
+    "ms"
+  );
+
   if (alreadyBooked.length > 0) {
     return res.status(409).json({
       success: false,
@@ -41,7 +73,15 @@ export const reserveShowSeats = asyncHandler(async (req, res) => {
     });
   }
 
+  const redisStart = performance.now();
+
   const result = await reserveSeats(showId, seats, userId);
+
+  console.log(
+    "reserveSeats / Redis:",
+    (performance.now() - redisStart).toFixed(2),
+    "ms"
+  );
 
   if (!result.success) {
     return res.status(409).json({
@@ -50,7 +90,17 @@ export const reserveShowSeats = asyncHandler(async (req, res) => {
     });
   }
 
-  res.json({ success: true, expiresIn: result.expiresIn, seats: result.seats });
+  console.log(
+    "TOTAL:",
+    (performance.now() - totalStart).toFixed(2),
+    "ms"
+  );
+
+  res.json({
+    success: true,
+    expiresIn: result.expiresIn,
+    seats: result.seats,
+  });
 });
 export const releaseShowSeats = asyncHandler(async (req, res) => {
   const { showId } = req.params;
@@ -68,15 +118,13 @@ export const releaseShowSeats = asyncHandler(async (req, res) => {
   if (!show) {
     throw new ApiError(404, "Show not found");
   }
-
-  // Make sure this user owns the Redis reservation
+ 
   const ownership = await verifyOwnership(
     showId,
     seats,
     userId
   );
-
-  // If the TTL already expired, the seats are already free.
+ 
   if (!ownership.valid) {
     return res.json({
       success: true,
