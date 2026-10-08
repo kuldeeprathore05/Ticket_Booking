@@ -3,6 +3,7 @@ import crypto from "crypto";
 import Booking from "../models/Booking.js";
 import { ApiError } from "../utils/ApiError.js";
 import { confirmBooking } from "../services/bookingService.js";
+import { releaseSeats} from "../services/seatLockService.js";
 
 const RAZORPAY_ENABLED = Boolean(
   process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET
@@ -76,7 +77,26 @@ export const verifyPayment = asyncHandler(async (req, res) => {
   }
 
   if (RAZORPAY_ENABLED) {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+    } = req.body;
+
+    if (
+      !razorpay_order_id ||
+      !razorpay_payment_id ||
+      !razorpay_signature
+    ) {
+      throw new ApiError(
+        400,
+        "Incomplete Razorpay payment details"
+      );
+    }
+
+    if (razorpay_order_id !== booking.paymentOrderId) {
+      throw new ApiError(400, "Invalid Razorpay order");
+    } 
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
@@ -84,7 +104,12 @@ export const verifyPayment = asyncHandler(async (req, res) => {
 
     if (expectedSignature !== razorpay_signature) {
       booking.paymentStatus = "FAILED";
+      booking.bookingStatus = "CANCELLED";
       await booking.save();
+      await releaseSeats(
+        booking.showId.toString(),
+        booking.seats
+      );
       throw new ApiError(400, "Payment verification failed");
     }
 

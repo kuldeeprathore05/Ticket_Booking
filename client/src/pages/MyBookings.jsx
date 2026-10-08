@@ -28,8 +28,29 @@ export default function MyBookings() {
   if (status === "error") return <div className="mx-auto max-w-3xl px-4 py-16"><ErrorState /></div>;
 
   const now = Date.now();
-  const upcoming = bookings.filter((b) => b.bookingStatus === "CONFIRMED" && new Date(`${b.showId?.date}T${b.showId?.startTime}`) >= now);
-  const past = bookings.filter((b) => !upcoming.includes(b));
+
+  const upcoming = bookings.filter(
+    (b) =>
+      b.bookingStatus === "CONFIRMED" &&
+      new Date(
+        `${b.showId?.date}T${b.showId?.startTime}`
+      ).getTime() >= now
+  );
+
+  const pending = bookings.filter(
+    (b) => b.bookingStatus === "PENDING"
+  );
+
+  const past = bookings.filter(
+    (b) =>
+      b.bookingStatus === "CANCELLED" ||
+      (
+        b.bookingStatus === "CONFIRMED" &&
+        new Date(
+          `${b.showId?.date}T${b.showId?.startTime}`
+        ).getTime() < now
+      )
+  );
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
@@ -43,8 +64,26 @@ export default function MyBookings() {
         />
       ) : (
         <div className="flex flex-col gap-8">
-          {upcoming.length > 0 && <Section title="Upcoming" bookings={upcoming} />}
-          {past.length > 0 && <Section title="Past & other bookings" bookings={past} />}
+          {upcoming.length > 0 && (
+  <Section
+    title="Upcoming"
+        bookings={upcoming}
+      />
+    )}
+
+    {pending.length > 0 && (
+      <Section
+        title="Payment pending"
+        bookings={pending}
+      />
+    )}
+
+    {past.length > 0 && (
+      <Section
+        title="Past & cancelled"
+        bookings={past}
+      />
+    )}
         </div>
       )}
     </div>
