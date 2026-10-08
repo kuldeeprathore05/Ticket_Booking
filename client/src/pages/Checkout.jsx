@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState,useRef,useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import toast from "react-hot-toast";
@@ -7,9 +7,10 @@ import {
   createPaymentOrder,
   verifyPayment,
 } from "../services/paymentService.js";
-import { setBooking, resetBooking } from "../store/bookingSlice.js";
+import { setBooking, resetBooking, clearReservation } from "../store/bookingSlice.js";
 import CountdownBadge from "../components/CountdownBadge.jsx";
 import { CreditCard } from "lucide-react";
+import { releaseSeatReservation } from "../services/showService.js";
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -24,7 +25,75 @@ export default function Checkout() {
   } = useSelector((s) => s.booking);
 
   const [processing, setProcessing] = useState(false);
+  const bookingIdRef = useRef(null);
+  const cleanupStartedRef = useRef(false);
+  const paymentCompletedRef = useRef(false);
 
+  useEffect(() => {
+    const handlePopState = async () => {
+      // Put the current route back temporarily so
+      // the user doesn't leave before cleanup finishes.
+      window.history.pushState(
+        null,
+        "",
+        window.location.href
+      );
+
+      await cleanupReservation();
+
+      navigate(`/shows/${show._id}/seats`, {
+        replace: true,
+      });
+    };
+
+    // Add a history entry so browser Back is intercepted
+    window.history.pushState(
+      null,
+      "",
+      window.location.href
+    );
+
+    window.addEventListener(
+      "popstate",
+      handlePopState
+    );
+
+    return () => {
+      window.removeEventListener(
+        "popstate",
+        handlePopState
+      );
+    };
+  }, [show?._id]);
+
+  const cleanupReservation = async () => {
+    if (cleanupStartedRef.current) return;
+
+    cleanupStartedRef.current = true;
+
+    try {
+      if (bookingIdRef.current) {
+        // MongoDB PENDING booking exists
+        // cancelBooking also releases Redis
+        await cancelBooking(bookingIdRef.current);
+      } else {
+        // No MongoDB booking yet.
+        // Just release Redis reservation.
+        await releaseSeatReservation(
+          show?._id,
+          selectedSeats
+        );
+      }
+    } catch (error) {
+      // If Redis TTL already expired, that's okay.
+      console.error(
+        "Reservation cleanup failed:",
+        error
+      );
+    } finally {
+      dispatch(clearReservation());
+    }
+  }; 
   if (!show || !selectedSeats?.length) {
     navigate("/movies", { replace: true });
     return null;
@@ -32,7 +101,8 @@ export default function Checkout() {
 
   const total = selectedSeats.length * show.price;
 
-  const onExpire = () => {
+  const onExpire = async () => {
+    await cleanupReservation();
     toast.error(
       "Your seat reservation expired. Please select seats again."
     );
@@ -62,6 +132,8 @@ export default function Checkout() {
       if (!booking?._id) {
         throw new Error("Booking creation failed.");
       }
+
+      bookingIdRef.current = booking._id;
 
       dispatch(
         setBooking({
@@ -140,6 +212,7 @@ export default function Checkout() {
 
             toast.success("Payment successful!");
 
+            paymentCompletedRef.current = true;
             dispatch(resetBooking());
 
             navigate(
@@ -153,6 +226,7 @@ export default function Checkout() {
               "Payment verification error:",
               e
             );
+             await cleanupReservation();
 
             const message =
               e?.response?.data?.message ||
@@ -166,8 +240,8 @@ export default function Checkout() {
 
         modal: {
           ondismiss: async function () {
-            try {
-              await cancelBooking(booking._id);
+            try { 
+              await cleanupReservation()
               toast("Payment cancelled. Seat released.");
             } catch (error) {
               console.error(
@@ -197,14 +271,8 @@ export default function Checkout() {
             response
           );
 
-          try {
-            await cancelBooking(booking._id);
-          } catch (error) {
-            console.error(
-              "Failed to cancel booking:",
-              error
-            );
-          }
+          await cleanupReservation();
+
 
           toast.error(
             response?.error?.description ||
@@ -219,6 +287,7 @@ export default function Checkout() {
       razorpay.open();
     } catch (e) {
       console.error("Payment initiation error:", e);
+      await cleanupReservation();
 
       const message =
         e?.response?.data?.message ||
@@ -239,6 +308,19 @@ export default function Checkout() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-10 sm:px-6">
+       <button
+        type="button"
+        onClick={async () => {
+          await cleanupReservation();
+
+          navigate(`/shows/${show._id}/seats`, {
+            replace: true,
+          });
+        }}
+        className="mb-5 inline-flex items-center gap-2 text-sm text-white/50 transition hover:text-white"
+      >
+        ← Back to seats
+      </button>
       <h1 className="mb-6 font-display text-xl font-semibold">
         Checkout
       </h1>

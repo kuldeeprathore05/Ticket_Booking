@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth, attachUser } from "../middleware/auth.js";
 import { getShowById, getShowSeats } from "../controllers/showController.js";
-import { reserveShowSeats, validateReserveSeats } from "../controllers/seatController.js";
+import { reserveShowSeats, validateReserveSeats,releaseShowSeats } from "../controllers/seatController.js";
 
 const router = Router();
 
@@ -13,6 +13,12 @@ router.post(
   attachUser,
   validateReserveSeats,
   reserveShowSeats
+);
+router.post(
+  "/:showId/seats/release", 
+  requireAuth,
+  attachUser,
+  releaseShowSeats
 );
 
 export default router;

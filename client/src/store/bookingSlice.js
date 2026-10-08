@@ -11,8 +11,7 @@ const initialState = {
   reservationExpiresAt: null, // epoch ms, set once the backend confirms the lock
   bookingId: null,
   bookingReference: null,
-};
-
+}; 
 const bookingSlice = createSlice({
   name: "booking",
   initialState,
@@ -36,6 +35,12 @@ const bookingSlice = createSlice({
         state.selectedSeats.push(seatId);
       }
     },
+    clearReservation(state) {
+      state.selectedSeats = [];
+      state.reservationExpiresAt = null;
+      state.bookingId = null;
+      state.bookingReference = null;
+    },
     setReservation(state, action) {
       const { expiresIn } = action.payload;
       state.reservationExpiresAt = Date.now() + expiresIn * 1000;
@@ -49,8 +54,7 @@ const bookingSlice = createSlice({
       return initialState;
     },
   },
-});
-
-export const { startBooking, toggleSeat, setReservation, setBooking, resetBooking } =
+}); 
+export const { startBooking, toggleSeat, setReservation, setBooking,clearReservation, resetBooking } =
   bookingSlice.actions;
 export default bookingSlice.reducer;

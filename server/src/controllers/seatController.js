@@ -3,7 +3,7 @@ import { body, validationResult } from "express-validator";
 import Show from "../models/Show.js";
 import Screen from "../models/Screen.js";
 import { ApiError } from "../utils/ApiError.js";
-import { reserveSeats } from "../services/seatLockService.js";
+import { reserveSeats,verifyOwnership,releaseSeats } from "../services/seatLockService.js";
 
 export const validateReserveSeats = [
   body("seats").isArray({ min: 1 }).withMessage("seats must be a non-empty array"),
@@ -51,4 +51,43 @@ export const reserveShowSeats = asyncHandler(async (req, res) => {
   }
 
   res.json({ success: true, expiresIn: result.expiresIn, seats: result.seats });
+});
+export const releaseShowSeats = asyncHandler(async (req, res) => {
+  const { showId } = req.params;
+  const { seats } = req.body;
+  const userId = req.user._id.toString();
+
+  if (!Array.isArray(seats) || seats.length === 0) {
+    throw new ApiError(
+      400,
+      "seats must be a non-empty array"
+    );
+  }
+
+  const show = await Show.findById(showId);
+  if (!show) {
+    throw new ApiError(404, "Show not found");
+  }
+
+  // Make sure this user owns the Redis reservation
+  const ownership = await verifyOwnership(
+    showId,
+    seats,
+    userId
+  );
+
+  // If the TTL already expired, the seats are already free.
+  if (!ownership.valid) {
+    return res.json({
+      success: true,
+      message: "Reservation already expired or released",
+    });
+  }
+
+  await releaseSeats(showId, seats);
+
+  res.json({
+    success: true,
+    message: "Seat reservation released",
+  });
 });
